@@ -1,0 +1,20 @@
+### As written by Nathan Spann ###
+
+Regarding pre RNA-Seq Library Prep:
+###################################
+1.  Make sequence library for all rRNA 
+    send sequence regions into Agilent and IDT to generate library of tiled complementary oligos for hybridization mediated clearance of rRNA
+    Biotin oligos only if we want to traptavidin column to isolate rRNA from RNA in lieu of steps 2 and 3 below
+    Clearance of rRNA:
+        1. hybridzie RNA and DNA
+        2. RNase and/or digest RNA
+        3. DNAse 1 digest oligos
+        4. RNA Seq library
+
+2. Take top 1-5 % expressed genes and create library of RNA sequences then have synthesized complementary oligos for hybrid-mediated clearance of top expressed RNAs
+   (biotinylated oligos for bead removal or digest hybridized RNA per the above steps)
+
+3. In lieu of having Agilent/IDT determine library sequence, could create script to use sequence of RNAs or highly expressed RNAs to generate sequence of oligos to tile the given RNA pool, and then order from IDT (possibly with biotin options)
+   * this should decrease upfront costs
+   * test digest vs streptavidin clearance
+
