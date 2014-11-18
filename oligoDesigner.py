@@ -77,7 +77,7 @@ def designOligos(targetSequences, backgroundFrequencyDict, targetLength, maxGapL
 	seenOligos = set()
 
 	for i in range(len(targetSequences)):
-		currentSequence = targetSequence[i]
+		currentSequence = targetSequences[i]
 		pos = 0
 		maxIndex = len(currentSequence) - targetLength - 1
 
@@ -105,11 +105,28 @@ def designOligos(targetSequences, backgroundFrequencyDict, targetLength, maxGapL
 			seenOligos.add(selectedOligoTuple[2])
 	# write fasta file
 	outFile = open(outputPath + "/designedOligos.fa", "w")
+	complementFile = open(outputPath + "/coveredRegions.fa", "w")
 	for i in range(len(designedOligos)):
-		outFile.write(">oligo_" + str(i) + "\n")
-		outFile.write(designedOligos[i] + "\n")
+		outFile.write(">oligo_" + str(i) + "\t" + str(designedOligoFrequencies[i]) + "\n")
+		outFile.write(revComp(designedOligos[i]) + "\n")
+		complementFile.write(">oligo_" + str(i) + "\t" + str(designedOligoFrequencies[i]) + "\n")
+		complementFile.write(designedOligos[i] + "\n")
 	outFile.close()
+	complementFile.close()
 	return designedOligoFrequencies
+
+def revComp(seq):
+	'''
+	reverse complements a sequence
+	inputs: a sequence
+	outputs: a reverse compelemented sequence
+	'''
+	rcDict = {"A":"T", "T":"A", "U":"A", "C":"G", "G":"C"}
+	toReturn = ""
+	for char in seq:
+		toReturn = rcDict[char] + toReturn
+	return toReturn
+		
 
 
 
@@ -156,7 +173,7 @@ if __name__ == "__main__":
 	else:
 		backgroundFrequencyDict = pickle.load(open(outputPath + "/backgroundFrequencyDict", "rb"))
 	
-	designedOligoFrequencies = designOligos(allTargetSequences, backgroundFrequencyDict, targetLength, maxGapLength, outputPath)
+	designedOligoFrequencies = designOligos(allTargetSequences, backgroundFrequencyDict, targetOligoLength, maxGapLength, outputPath)
 		
 	# plot background frequencies
 	plt.hist(list(backgroundFrequencyDict.values()))
