@@ -36,26 +36,6 @@ def readFastaFile(fastaFilePath):
 
 	return sequences, headers
 
-def countOligos(sequences, targetLength):
-	'''
-	Given a list of sequences, creates a dictionary that gives the number of occurences each oligomer of the given targetLength appears
-	inputs: list of sequences, targetLength of mers to count
-	outputs: a dictionary of the following format - {oligomer: frequency}
-	'''
-	frequencyDict = {}
-	for i in range(len(sequences)):
-		seq = sequences[i]
-		seqtargetLength = len(seq)
-		if seqtargetLength >= targetLength:
-			for j in range(seqtargetLength - targetLength):
-				oligo = seq[j: j + targetLength]
-				if oligo in frequencyDict:
-					frequencyDict[oligo] += 1
-				else: 
-					frequencyDict[oligo] = 1
-
-	return frequencyDict
-
 def designOligos(targetSequences, backgroundFrequencyDict, targetLength, maxGapLength, threshold, outputPath):
 	'''
 	Given the frequency of oligos in the backgroundFrequencyDict, construct oligos of length targetLength that tile the input sequences with a maximum distance of maxGapLength between them
@@ -67,13 +47,7 @@ def designOligos(targetSequences, backgroundFrequencyDict, targetLength, maxGapL
 	designedPositions= []
 	backgroundCounts = list(backgroundFrequencyDict.values())
 	designedOligoFrequencies = [] # how many times do the designed oligos appear in the background
-# not sure if a threshold is neccessarily, just use the oligo with the lowest frequency in the background
-#	mean = np.mean(backgroundCounts)
-#	std =  np.std(backgroundCounts)
-#	threshold = mean - 3 * std # values lower than 3 standard devations of the mean should constitute just 0.0015% of all the total values
-#	print("Using threshold: " + str(threshold))
-#	if threshold < 0:
-#		threshold = 0
+
 	seenOligos = set()
 
 	for i in range(len(targetSequences)):
@@ -138,7 +112,7 @@ def revComp(seq):
 
 if __name__ == "__main__":
 	targetDirectoryPath = sys.argv[1] # path to a directory containing fasta files giving the sequences we want the oligos to hybridize to
-	backgroundDirectoryPath = sys.argv[2] # path to a directory containing fasta files containing sequences we don't want the oligos to hybridize to
+	backgroundFrequencyDictPath = sys.argv[2] # path to a directory containing fasta files containing sequences we don't want the oligos to hybridize to
 	targetOligoLength = int(sys.argv[3]) # desired length of oligos
 	maxGapLength = int(sys.argv[4]) # desired length of oligos
 	threshold = int(sys.argv[5])
@@ -161,26 +135,10 @@ if __name__ == "__main__":
 		targetSequences, targetHeaders = readFastaFile(targetDirectoryPath + "/" + targetFile)
 		allTargetSequences += targetSequences
 		allTargetHeaders += targetHeaders
+	
+	# read in background frequency dict
+	backgroundFrequencyDict = pickle.load(open(backgroundFrequencyDictPath, "rb"))
 
-	if not os.path.exists(outputPath+"/backgroundFrequencyDict"):
-		# compute background frequency dict only if it's required, otherwise it's a pretty expensive operation
-		print("reading background files")
-		for backgroundFile in os.listdir(backgroundDirectoryPath):
-			print(backgroundFile)
-			backgroundSequences, backgroundHeaders = readFastaFile(backgroundDirectoryPath + "/" + backgroundFile)
-			allBackgroundSequences += backgroundSequences
-			allBackgroundHeaders += backgroundHeaders
-		# compute frequency of background oligos	
-		print("counting background oligos")
-		backgroundFrequencyDict = countOligos(allBackgroundSequences, targetOligoLength)
-
-		backgroundFrequencyFile = open(outputPath+"/backgroundFrequencyDict","wb")
-		print("saving background oligos")
-		pickle.dump(backgroundFrequencyDict, backgroundFrequencyFile)
-		backgroundFrequencyFile.close()
-
-	else:
-		backgroundFrequencyDict = pickle.load(open(outputPath + "/backgroundFrequencyDict", "rb"))
 	print("designing oligos")	
 	designedOligoFrequencies, designedPositions = designOligos(allTargetSequences, backgroundFrequencyDict, targetOligoLength, maxGapLength, threshold, outputPath)
 		
