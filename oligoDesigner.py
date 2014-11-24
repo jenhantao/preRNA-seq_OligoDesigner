@@ -48,7 +48,6 @@ def countOligos(sequences, targetLength):
 		seqtargetLength = len(seq)
 		if seqtargetLength >= targetLength:
 			for j in range(seqtargetLength - targetLength):
-				print(i, j, seqtargetLength)
 				oligo = seq[j: j + targetLength]
 				if oligo in frequencyDict:
 					frequencyDict[oligo] += 1
@@ -57,7 +56,7 @@ def countOligos(sequences, targetLength):
 
 	return frequencyDict
 
-def designOligos(targetSequences, backgroundFrequencyDict, targetLength, maxGapLength, outputPath):
+def designOligos(targetSequences, backgroundFrequencyDict, targetLength, maxGapLength, threshold, outputPath):
 	'''
 	Given the frequency of oligos in the backgroundFrequencyDict, construct oligos of length targetLength that tile the input sequences with a maximum distance of maxGapLength between them
 	inputs: dictionary that gives the frequency of all background oligos, target sequences we want to design oligos to hybridize to, target length of the oligos, max gap length between the oligos
@@ -65,6 +64,7 @@ def designOligos(targetSequences, backgroundFrequencyDict, targetLength, maxGapL
 
 	'''
 	designedOligos = []
+	designedPositions= []
 	backgroundCounts = list(backgroundFrequencyDict.values())
 	designedOligoFrequencies = [] # how many times do the designed oligos appear in the background
 # not sure if a threshold is neccessarily, just use the oligo with the lowest frequency in the background
@@ -93,27 +93,33 @@ def designOligos(targetSequences, backgroundFrequencyDict, targetLength, maxGapL
 						freq = backgroundFrequencyDict[oligo]
 					else:
 						freq = 0
-					oligoPos = pos + j + targetLength
-					oligoTuples.append((freq, oligoPos, oligo))
+					if freq < threshold:
+						oligoPos = pos + j + targetLength
+						oligoTuples.append((freq, oligoPos, oligo))
 				j += 1
 			# pick the oligo with the lowest frequency
-			oligoTuples.sort()
-			selectedOligoTuple = oligoTuples[0]
-			pos = selectedOligoTuple[1]	
-			designedOligos.append(selectedOligoTuple[2])
-			designedOligoFrequencies.append(selectedOligoTuple[0])
-			seenOligos.add(selectedOligoTuple[2])
+			if oligoTuples:
+				oligoTuples.sort()
+				selectedOligoTuple = oligoTuples[0]
+				pos = selectedOligoTuple[1]	
+				designedPositions.append(pos)
+				designedOligos.append(selectedOligoTuple[2])
+				designedOligoFrequencies.append(selectedOligoTuple[0])
+				seenOligos.add(selectedOligoTuple[2])
+			else:
+				# no oligos satisfy design requirements
+				pos = pos + maxGapLength + targetLength
 	# write fasta file
 	outFile = open(outputPath + "/designedOligos.fa", "w")
 	complementFile = open(outputPath + "/coveredRegions.fa", "w")
 	for i in range(len(designedOligos)):
-		outFile.write(">oligo_" + str(i) + "\t" + str(designedOligoFrequencies[i]) + "\n")
+		outFile.write(">oligo_" + str(i) + "\t" + str(designedOligoFrequencies[i]) + "\t" + str(designedPositions[i])+ "\n")
 		outFile.write(revComp(designedOligos[i]) + "\n")
-		complementFile.write(">oligo_" + str(i) + "\t" + str(designedOligoFrequencies[i]) + "\n")
+		complementFile.write(">oligo_" + str(i) + "\t" + str(designedOligoFrequencies[i]) + "\t" + str(designedPositions[i])+ "\n")
 		complementFile.write(designedOligos[i] + "\n")
 	outFile.close()
 	complementFile.close()
-	return designedOligoFrequencies
+	return designedOligoFrequencies, designedPositions
 
 def revComp(seq):
 	'''
@@ -135,7 +141,8 @@ if __name__ == "__main__":
 	backgroundDirectoryPath = sys.argv[2] # path to a directory containing fasta files containing sequences we don't want the oligos to hybridize to
 	targetOligoLength = int(sys.argv[3]) # desired length of oligos
 	maxGapLength = int(sys.argv[4]) # desired length of oligos
-	outputPath = sys.argv[5] # path to write output files
+	threshold = int(sys.argv[5])
+	outputPath = sys.argv[6] # path to write output files
 	
 	# create output directory if it doesn't exist
 	if not os.path.isdir(outputPath):
@@ -164,17 +171,20 @@ if __name__ == "__main__":
 			allBackgroundSequences += backgroundSequences
 			allBackgroundHeaders += backgroundHeaders
 		# compute frequency of background oligos	
+		print("counting background oligos")
 		backgroundFrequencyDict = countOligos(allBackgroundSequences, targetOligoLength)
 
 		backgroundFrequencyFile = open(outputPath+"/backgroundFrequencyDict","wb")
+		print("saving background oligos")
 		pickle.dump(backgroundFrequencyDict, backgroundFrequencyFile)
 		backgroundFrequencyFile.close()
 
 	else:
 		backgroundFrequencyDict = pickle.load(open(outputPath + "/backgroundFrequencyDict", "rb"))
-	
-	designedOligoFrequencies = designOligos(allTargetSequences, backgroundFrequencyDict, targetOligoLength, maxGapLength, outputPath)
+	print("designing oligos")	
+	designedOligoFrequencies, designedPositions = designOligos(allTargetSequences, backgroundFrequencyDict, targetOligoLength, maxGapLength, threshold, outputPath)
 		
+	print("making plots")
 	# plot background frequencies
 	plt.hist(list(backgroundFrequencyDict.values()))
 	plt.xlabel("Oligo Frequency")
@@ -184,9 +194,20 @@ if __name__ == "__main__":
 
 	# plot oligo frequency distribution vs background
 	plt.hist(designedOligoFrequencies)
+	plt.title("Hybridization to Background (Mean="+str(np.mean(designedOligoFrequencies))+ ", Std="+str(np.std(designedOligoFrequencies)) + ")")
 	plt.xlabel("Oligo Frequency")
 	plt.ylabel("Frequency")
 	plt.savefig(outputPath + "/designedOligoFrequency.png")
+	plt.close()
+
+	# plot coverage
+	# calculate differences
+	diff = [designedPositions[n] - designedPositions[n-1] for n in range(1, len(designedPositions))]
+	plt.hist(diff)
+	plt.title("Coverage (Mean="+str(np.mean(diff))+ ", Std="+str(np.std(diff)) + ")")
+	plt.xlabel("Distance between adjacent oligo")
+	plt.ylabel("Frequency")
+	plt.savefig(outputPath + "/coverage.png")
 	plt.close()
 	
 
